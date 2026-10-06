@@ -64,8 +64,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // SKFS
-Rcpp::List SKFS(arma::mat X, arma::mat A, arma::mat C, arma::mat Q, arma::mat R, arma::colvec F_0, arma::mat P_0, bool retLL);
-RcppExport SEXP _dfms_SKFS(SEXP XSEXP, SEXP ASEXP, SEXP CSEXP, SEXP QSEXP, SEXP RSEXP, SEXP F_0SEXP, SEXP P_0SEXP, SEXP retLLSEXP) {
+Rcpp::List SKFS(arma::mat X, arma::mat A, arma::mat C, arma::mat Q, arma::mat R, arma::colvec F_0, arma::mat P_0, bool retLL, bool contributions);
+RcppExport SEXP _dfms_SKFS(SEXP XSEXP, SEXP ASEXP, SEXP CSEXP, SEXP QSEXP, SEXP RSEXP, SEXP F_0SEXP, SEXP P_0SEXP, SEXP retLLSEXP, SEXP contributionsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -77,7 +77,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< arma::colvec >::type F_0(F_0SEXP);
     Rcpp::traits::input_parameter< arma::mat >::type P_0(P_0SEXP);
     Rcpp::traits::input_parameter< bool >::type retLL(retLLSEXP);
-    rcpp_result_gen = Rcpp::wrap(SKFS(X, A, C, Q, R, F_0, P_0, retLL));
+    Rcpp::traits::input_parameter< bool >::type contributions(contributionsSEXP);
+    rcpp_result_gen = Rcpp::wrap(SKFS(X, A, C, Q, R, F_0, P_0, retLL, contributions));
     return rcpp_result_gen;
 END_RCPP
 }

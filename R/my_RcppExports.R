@@ -155,8 +155,8 @@ FIS <- function(A, F, F_pred, P, P_pred, F_0 = NULL, P_0 = NULL) {
 #' rm(X, r, p, n, X_imp, v, F_pc, C, res, R, var, A, Q, F_0, P_0, kfs_res, F_kal, kfs_res2, F_kal2)
 #'
 #' @export
-SKFS <- function(X, A, C, Q, R, F_0, P_0, loglik = FALSE) {
-  .Call(Cpp_SKFS, X, A, C, Q, R, F_0, P_0, loglik)
+SKFS <- function(X, A, C, Q, R, F_0, P_0, loglik = FALSE, contributions = FALSE) {
+  .Call(Cpp_SKFS, X, A, C, Q, R, F_0, P_0, loglik, contributions)
 }
 
 

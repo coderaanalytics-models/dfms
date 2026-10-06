@@ -8,4 +8,5 @@ Rcpp::List FIS(arma::mat A,
                arma::colvec F_0, arma::mat P_0);
 
 Rcpp::List SKFS(arma::mat X, arma::mat A, arma::mat C, arma::mat Q,
-                arma::mat R, arma::colvec F_0, arma::mat P_0, bool retLL = false);
+                arma::mat R, arma::colvec F_0, arma::mat P_0,
+				bool retLL = false, bool contributions = false);

@@ -13,8 +13,8 @@ FIS <- function(A, ZTf, ZTp, VTf_v, VTp_v, F_0SEXP, P_0SEXP) {
     .Call(`_dfms_FIS`, A, ZTf, ZTp, VTf_v, VTp_v, F_0SEXP, P_0SEXP)
 }
 
-SKFS <- function(X, A, C, Q, R, F_0, P_0, retLL = FALSE) {
-    .Call(`_dfms_SKFS`, X, A, C, Q, R, F_0, P_0, retLL)
+SKFS <- function(X, A, C, Q, R, F_0, P_0, retLL = FALSE, contributions = FALSE) {
+    .Call(`_dfms_SKFS`, X, A, C, Q, R, F_0, P_0, retLL, contributions)
 }
 
 ainv <- function(x) {
