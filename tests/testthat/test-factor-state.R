@@ -1,33 +1,3 @@
-make_block_spec <- function() {
-	parse_factor_spec(
-			series = c(
-					"PMI",
-					"IP",
-					"SALES",
-					"RETAIL",
-					"GDP"
-			),
-			factors = list(
-					PMI = c("global", "manufacturing"),
-					IP = c("global", "manufacturing"),
-					SALES = c("global", "consumption"),
-					RETAIL = c("global", "consumption"),
-					GDP = "global"
-			),
-			factor_multiplicities = c(
-					global = 2L,
-					manufacturing = 1L,
-					consumption = 1L
-			),
-			factor_orders = c(
-					global = 1L,
-					manufacturing = 2L,
-					consumption = 1L
-			),
-			quarterly_vars = "GDP"
-	)
-}
-
 test_that("factor state dimensions follow block VAR orders", {
 	spec <- make_block_spec()
 
@@ -143,4 +113,31 @@ test_that("higher VAR orders are preserved", {
 
 	expect_equal(layout$n_states, 6L)
 	expect_identical(layout$block_lags, c(global = 6L))
+})
+
+test_that("VAR orders are distinct from retained state lags", {
+	spec <- make_block_spec()
+
+	layout <- build_factor_state_layout(
+			spec,
+			quarterly = TRUE
+	)
+
+	expect_equal(
+			layout$block_orders,
+			c(
+					global = 1L,
+					consumption = 1L,
+					manufacturing = 2L
+			)
+	)
+
+	expect_equal(
+			layout$block_lags,
+			c(
+					global = 5L,
+					consumption = 5L,
+					manufacturing = 5L
+			)
+	)
 })

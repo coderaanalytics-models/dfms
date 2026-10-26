@@ -100,6 +100,7 @@ build_factor_state_layout <- function(spec, quarterly = FALSE) {
   list(
 		n_states = offset,
 		n_factors = spec$n_factors,
+		block_orders = orders,
 		block_lags = block_lags,
 		block_dims = block_dims,
 		state_dims = state_dims,

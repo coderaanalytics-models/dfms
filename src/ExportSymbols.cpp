@@ -10,7 +10,7 @@ RcppExport SEXP _dfms_apinv(SEXP FsEXP);
 static const R_CallMethodDef CallEntries[] = {
   {"Cpp_SKF", (DL_FUNC) &_dfms_SKF, 8},
   {"Cpp_FIS", (DL_FUNC) &_dfms_FIS, 7},
-  {"Cpp_SKFS", (DL_FUNC) &_dfms_SKFS, 8},
+  {"Cpp_SKFS", (DL_FUNC) &_dfms_SKFS, 9},
   {"Cpp_Estep", (DL_FUNC) &_dfms_Estep, 7},
   {"Cpp_ainv", (DL_FUNC) &_dfms_ainv, 1},
   {"Cpp_apinv", (DL_FUNC) &_dfms_apinv, 1},
