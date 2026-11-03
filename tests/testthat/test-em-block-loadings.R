@@ -1,0 +1,130 @@
+test_that("compiled monthly loadings match R reference", {
+	ss <- make_test_full_state()
+
+	initial <- initialise_full_state(
+			ss$matrices$A,
+			ss$matrices$Q
+	)
+
+	sim <- simulate_full_state(
+			ss$matrices,
+			initial,
+			n_periods = 120L
+	)
+
+	X <- make_mixed_frequency_observations(
+			sim$observations,
+			quarterly_vars = "GDP"
+	)
+
+	smooth <- SKFS(
+			X = X,
+			A = ss$matrices$A,
+			C = ss$matrices$C,
+			Q = ss$matrices$Q,
+			R = ss$matrices$R,
+			F_0 = initial$F_0,
+			P_0 = initial$P_0,
+			loglik = FALSE
+	)
+
+	maps <- build_loading_maps(
+			ss$spec,
+			ss$layout
+	)
+
+	compiled <- update_loadings_cpp(
+			X,
+			smooth$F_smooth,
+			smooth$P_smooth,
+			maps
+	)
+
+	# Compare monthly series against the reference estimator.
+	for (series in ss$layout$monthly_vars) {
+			map <- maps[[series]]
+		
+			reference <- update_monthly_loadings(
+					X = X,
+					smooth = smooth,
+					factor_indices = setNames(
+							list(as.integer(map$indices[, 1L])),
+							series
+					),
+					idio_indices = setNames(
+							map$idio_index,
+							series
+					)
+			)
+
+			expect_equal(
+					compiled[[series]],
+					reference[[series]],
+					tolerance = 1e-10
+			)
+	}
+})
+
+test_that("compiled quarterly loadings match R reference", {
+	ss <- make_test_full_state()
+
+	initial <- initialise_full_state(
+			ss$matrices$A,
+			ss$matrices$Q
+	)
+
+	sim <- simulate_full_state(
+			ss$matrices,
+			initial,
+			n_periods = 120L
+	)
+
+	X <- make_mixed_frequency_observations(
+			sim$observations,
+			quarterly_vars = "GDP"
+	)
+
+	smooth <- SKFS(
+			X = X,
+			A = ss$matrices$A,
+			C = ss$matrices$C,
+			Q = ss$matrices$Q,
+			R = ss$matrices$R,
+			F_0 = initial$F_0,
+			P_0 = initial$P_0,
+			loglik = FALSE
+	)
+
+	maps <- build_loading_maps(
+			ss$spec,
+			ss$layout
+	)
+
+	compiled <- update_loadings_cpp(
+			X,
+			smooth$F_smooth,
+			smooth$P_smooth,
+			maps
+	)
+
+	map <- maps$GDP
+
+	lag_indices <- lapply(
+			seq_len(ncol(map$indices)),
+			function(lag) as.integer(map$indices[, lag])
+	)
+
+	reference <- update_quarterly_loadings(
+			X = X,
+			smooth = smooth,
+			factor_indices = list(GDP = lag_indices),
+			idio_indices = c(GDP = map$idio_index)
+	)
+
+	expect_equal(
+			compiled$GDP,
+			reference$GDP,
+			tolerance = 1e-10
+	)
+})
+

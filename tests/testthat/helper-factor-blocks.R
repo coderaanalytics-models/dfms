@@ -147,3 +147,20 @@ make_test_full_state <- function() {
 			matrices = matrices
 	)
 }
+
+expand_loading_map <- function(map, loadings, n_states) {
+	row <- numeric(n_states)
+
+	for (j in seq_len(map$n_loadings)) {
+			for (lag in seq_along(map$weights)) {
+					index <- map$indices[j, lag]
+
+					row[index] <- row[index] +
+							loadings[j] * map$weights[lag]
+			}
+	}
+
+	row[map$idio_index] <- 1
+
+	row
+}

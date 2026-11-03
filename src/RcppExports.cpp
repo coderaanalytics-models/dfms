@@ -11,6 +11,36 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// update_loadings_cpp
+List update_loadings_cpp(const arma::mat& X, const arma::mat& F_smooth, const arma::cube& P_smooth, const List& loading_maps);
+RcppExport SEXP _dfms_update_loadings_cpp(SEXP XSEXP, SEXP F_smoothSEXP, SEXP P_smoothSEXP, SEXP loading_mapsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type F_smooth(F_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type P_smooth(P_smoothSEXP);
+    Rcpp::traits::input_parameter< const List& >::type loading_maps(loading_mapsSEXP);
+    rcpp_result_gen = Rcpp::wrap(update_loadings_cpp(X, F_smooth, P_smooth, loading_maps));
+    return rcpp_result_gen;
+END_RCPP
+}
+// update_factor_blocks_cpp
+Rcpp::List update_factor_blocks_cpp(const arma::mat& F_smooth, const arma::cube& P_smooth, const arma::cube& PPm_smooth, const arma::vec& F_smooth_0, const arma::mat& P_smooth_0, const Rcpp::List& factor_layout);
+RcppExport SEXP _dfms_update_factor_blocks_cpp(SEXP F_smoothSEXP, SEXP P_smoothSEXP, SEXP PPm_smoothSEXP, SEXP F_smooth_0SEXP, SEXP P_smooth_0SEXP, SEXP factor_layoutSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type F_smooth(F_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type P_smooth(P_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type PPm_smooth(PPm_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type F_smooth_0(F_smooth_0SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type P_smooth_0(P_smooth_0SEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type factor_layout(factor_layoutSEXP);
+    rcpp_result_gen = Rcpp::wrap(update_factor_blocks_cpp(F_smooth, P_smooth, PPm_smooth, F_smooth_0, P_smooth_0, factor_layout));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Estep
 Rcpp::List Estep(arma::mat X, arma::mat A, arma::mat C, arma::mat Q, arma::mat R, arma::colvec F_0, arma::mat P_0);
 RcppExport SEXP _dfms_Estep(SEXP XSEXP, SEXP ASEXP, SEXP CSEXP, SEXP QSEXP, SEXP RSEXP, SEXP F_0SEXP, SEXP P_0SEXP) {
