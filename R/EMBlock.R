@@ -19,9 +19,13 @@ EMstepBlock <- function(X, state, layout, loading_maps) {
 			factor_layout = layout$factor
 	)
 
-	idio_updates <- update_idiosyncratic_ar1(
-			smooth = smooth,
-			layout = layout
+	idio_updates <- update_idiosyncratic_ar1_cpp(
+		F_smooth = smooth$F_smooth,
+		P_smooth = smooth$P_smooth,
+		PPm_smooth = smooth$PPm_smooth,
+		F_smooth_0 = as.vector(smooth$F_smooth_0),
+		P_smooth_0 = smooth$P_smooth_0,
+		idio_indices = layout$idio_current
 	)
 
 	factor_matrices <- build_factor_matrices(

@@ -284,3 +284,100 @@ Rcpp::List update_factor_blocks_cpp(
 		Rcpp::Named("covariances") = covariances
 	);
 }
+
+
+
+// [[Rcpp::export]]
+Rcpp::List update_idiosyncratic_ar1_cpp(
+	const arma::mat& F_smooth,
+	const arma::cube& P_smooth,
+	const arma::cube& PPm_smooth,
+	const arma::vec& F_smooth_0,
+	const arma::mat& P_smooth_0,
+	const Rcpp::IntegerVector& idio_indices
+) {
+	const arma::uword T = F_smooth.n_rows;
+	const arma::uword n = F_smooth.n_cols;
+
+	if (T < 2) {
+		Rcpp::stop("At least two observations are required");
+	}
+
+	if (
+		P_smooth.n_rows != n ||
+		P_smooth.n_cols != n ||
+		P_smooth.n_slices != T ||
+		PPm_smooth.n_rows != n ||
+		PPm_smooth.n_cols != n ||
+		PPm_smooth.n_slices != T ||
+		F_smooth_0.n_elem != n ||
+		P_smooth_0.n_rows != n ||
+		P_smooth_0.n_cols != n
+	) {
+		Rcpp::stop("Incompatible smoother dimensions");
+	}
+
+	const R_xlen_t m = idio_indices.size();
+	std::vector<bool> seen(n, false);
+
+	for (R_xlen_t j = 0; j < m; ++j) {
+		const int idx = idio_indices[j];
+
+		if (
+			idx == NA_INTEGER ||
+			idx < 1 ||
+			static_cast<arma::uword>(idx) > n ||
+			seen[static_cast<arma::uword>(idx - 1)]
+		) {
+			Rcpp::stop("Invalid idiosyncratic state indices");
+		}
+
+		seen[static_cast<arma::uword>(idx - 1)] = true;
+	}
+
+	Rcpp::NumericVector rho(m);
+	Rcpp::NumericVector sigma2(m);
+
+	for (R_xlen_t j = 0; j < m; ++j) {
+		const arma::uword i = static_cast<arma::uword>(idio_indices[j] - 1);
+
+		double S_yy = 0.0;
+		double S_xx = 0.0;
+		double S_yx = 0.0;
+
+		for (arma::uword t = 0; t < T; ++t) {
+			const double y = F_smooth(t, i);
+
+			const double x = (t == 0)
+			? F_smooth_0(i)
+			: F_smooth(t - 1, i);
+			
+			const double P_prev = (t == 0)
+			? P_smooth_0(i, i)
+			: P_smooth(i, i, t - 1);
+
+			S_yy += y * y + P_smooth(i, i, t);
+			S_xx += x * x + P_prev;
+			S_yx += y * x + PPm_smooth(i, i, t);
+		}
+
+		if (!std::isfinite(S_xx) || S_xx <= 0.0) {
+			Rcpp::stop("Invalid idiosyncratic normal equations");
+		}
+
+		rho[j] = S_yx / S_xx;
+		sigma2[j] = (S_yy - rho[j] * S_yx) / static_cast<double>(T);
+	}
+
+	Rcpp::RObject names = idio_indices.attr("names");
+
+	if (!names.isNULL()) {
+		rho.attr("names") = names;
+		sigma2.attr("names") = names;
+	}
+
+	return Rcpp::List::create(
+		Rcpp::Named("coefficients") = rho,
+		Rcpp::Named("variances") = sigma2
+	);
+}

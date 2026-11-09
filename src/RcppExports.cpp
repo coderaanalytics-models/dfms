@@ -41,6 +41,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// update_idiosyncratic_ar1_cpp
+Rcpp::List update_idiosyncratic_ar1_cpp(const arma::mat& F_smooth, const arma::cube& P_smooth, const arma::cube& PPm_smooth, const arma::vec& F_smooth_0, const arma::mat& P_smooth_0, const Rcpp::IntegerVector& idio_indices);
+RcppExport SEXP _dfms_update_idiosyncratic_ar1_cpp(SEXP F_smoothSEXP, SEXP P_smoothSEXP, SEXP PPm_smoothSEXP, SEXP F_smooth_0SEXP, SEXP P_smooth_0SEXP, SEXP idio_indicesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat& >::type F_smooth(F_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type P_smooth(P_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::cube& >::type PPm_smooth(PPm_smoothSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type F_smooth_0(F_smooth_0SEXP);
+    Rcpp::traits::input_parameter< const arma::mat& >::type P_smooth_0(P_smooth_0SEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type idio_indices(idio_indicesSEXP);
+    rcpp_result_gen = Rcpp::wrap(update_idiosyncratic_ar1_cpp(F_smooth, P_smooth, PPm_smooth, F_smooth_0, P_smooth_0, idio_indices));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Estep
 Rcpp::List Estep(arma::mat X, arma::mat A, arma::mat C, arma::mat Q, arma::mat R, arma::colvec F_0, arma::mat P_0);
 RcppExport SEXP _dfms_Estep(SEXP XSEXP, SEXP ASEXP, SEXP CSEXP, SEXP QSEXP, SEXP RSEXP, SEXP F_0SEXP, SEXP P_0SEXP) {

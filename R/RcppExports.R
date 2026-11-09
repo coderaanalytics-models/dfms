@@ -9,6 +9,10 @@ update_factor_blocks_cpp <- function(F_smooth, P_smooth, PPm_smooth, F_smooth_0,
     .Call(`_dfms_update_factor_blocks_cpp`, F_smooth, P_smooth, PPm_smooth, F_smooth_0, P_smooth_0, factor_layout)
 }
 
+update_idiosyncratic_ar1_cpp <- function(F_smooth, P_smooth, PPm_smooth, F_smooth_0, P_smooth_0, idio_indices) {
+    .Call(`_dfms_update_idiosyncratic_ar1_cpp`, F_smooth, P_smooth, PPm_smooth, F_smooth_0, P_smooth_0, idio_indices)
+}
+
 Estep <- function(X, A, C, Q, R, F_0, P_0) {
     .Call(`_dfms_Estep`, X, A, C, Q, R, F_0, P_0)
 }

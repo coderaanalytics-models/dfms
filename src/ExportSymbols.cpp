@@ -30,6 +30,14 @@ RcppExport SEXP _dfms_update_factor_blocks_cpp(
     SEXP P_smooth_0SEXP,
     SEXP factor_layoutSEXP
 );
+RcppExport SEXP _dfms_update_idiosyncratic_ar1_cpp(
+	SEXP F_smoothSEXP,
+    SEXP P_smoothSEXP,
+    SEXP PPm_smoothSEXP,
+    SEXP F_smooth_0SEXP,
+    SEXP P_smooth_0SEXP,
+	SEXP idio_indicesSEXP
+);
 
 
 static const R_CallMethodDef CallEntries[] = {
@@ -41,6 +49,7 @@ static const R_CallMethodDef CallEntries[] = {
   {"Cpp_apinv", (DL_FUNC) &_dfms_apinv, 1},
   {"_dfms_update_loadings_cpp", (DL_FUNC) &_dfms_update_loadings_cpp, 4},
   {"_dfms_update_factor_blocks_cpp", (DL_FUNC) &_dfms_update_factor_blocks_cpp, 6},
+  {"_dfms_update_idiosyncratic_ar1_cpp", (DL_FUNC) & _dfms_update_idiosyncratic_ar1_cpp, 6},
   {NULL, NULL, 0}
 };
 
