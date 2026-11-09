@@ -46,6 +46,20 @@ List update_loadings_cpp(
 			Rcpp::stop("Invalid idiosyncratic state index.");
 		}
 
+		for (arma::uword j = 0; j < k; ++j) {
+			for (arma::uword lag = 0; lag < L; ++lag) {
+				const int idx = indices(j ,lag);
+
+				if (
+					idx == NA_INTEGER ||
+					idx < 1 ||
+					static_cast<arma::uword>(idx) > n_states
+				) {
+					Rcpp::stop("Invalid factor-state index in loading map");
+				}
+			}
+		}
+
 		arma::mat S_gg(k, k, arma::fill::zeros);
 		arma::vec S_gy(k, arma::fill::zeros);
 		arma::vec S_gu(k, arma::fill::zeros);

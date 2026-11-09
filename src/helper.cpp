@@ -82,4 +82,3 @@ SEXP apinv(SEXP x) {
   DUPLICATE_ATTRIB(res, x);
   return res;
 }
-

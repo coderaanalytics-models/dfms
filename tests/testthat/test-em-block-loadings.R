@@ -128,3 +128,36 @@ test_that("compiled quarterly loadings match R reference", {
 	)
 })
 
+test_that("loading update rejects invalid factor-state indices", {
+  # 5 observations, 1 observed series, 2 latent states
+  X <- matrix(rnorm(5), nrow = 5, ncol = 1)
+  F_smooth <- matrix(rnorm(10), nrow = 5, ncol = 2)
+  P_smooth <- array(0, dim = c(2, 2, 5))
+
+  loading_maps <- list(
+    series_1 = list(
+      indices = matrix(3L, nrow = 1, ncol = 1),
+      weights = 1,
+      idio_index = 2L
+    )
+  )
+
+  expect_error(
+    update_loadings_cpp(X, F_smooth, P_smooth, loading_maps),
+    "Invalid factor-state index"
+  )
+  
+  loading_maps[[1]]$indices[1, 1] <- 0L
+
+	expect_error(
+		update_loadings_cpp(X, F_smooth, P_smooth, loading_maps),
+		"Invalid factor-state index"
+	)
+
+	loading_maps[[1]]$indices[1, 1] <- NA_integer_
+
+	expect_error(
+		update_loadings_cpp(X, F_smooth, P_smooth, loading_maps),
+		"Invalid factor-state index"
+	)
+})

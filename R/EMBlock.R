@@ -24,9 +24,50 @@ EMstepBlock <- function(X, state, layout, loading_maps) {
 			layout = layout
 	)
 
-	list(
-			smooth = smooth,
-			factor_updates = factor_updates,
-			idio_updates = idio_updates
+	factor_matrices <- build_factor_matrices(
+		layout = layout$factor,
+		coefficients = factor_updates$coefficients,
+		covariances = factor_updates$covariances
 	)
+
+	loading_updates <- update_loadings_cpp(
+		X = X,
+		F_smooth = smooth$F_smooth,
+		P_smooth = smooth$P_smooth,
+		loading_maps = loading_maps
+	)
+
+	loadings <- assemble_loadings(
+		updates = loading_updates,
+		loading_mask = spec$loading_mask
+	)
+
+	list(
+		smooth = smooth,
+		factor_updates = factor_updates,
+		idio_updates = idio_updates,
+		factor_matrices = factor_matrices,
+		loading_updates = loading_updates,
+		loadings = loadings
+	)
+}
+
+
+assemble_loadings <- function(updates, loading_mask) {
+	loadings <- matrix(
+		0,
+		nrow = nrow(loading_mask),
+		ncol = ncol(loading_mask),
+		dimnames = dimnames(loading_mask)
+	)
+
+	for (i in seq_len(nrow(loading_mask))) {
+		allowed <- which(loading_mask[i, ])
+
+		if (length(updates[[i]]) != length(allowed)) {
+			stop("Loading dimensions do not match the loading mask")
+		}
+		loadings[i, allowed] <- updates[[i]]
+	}
+	loadings
 }
