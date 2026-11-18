@@ -33,17 +33,29 @@ List update_loadings_cpp(
 
 		IntegerMatrix indices = map["indices"];
 		NumericVector weights = map["weights"];
-		int idio = as<int>(map["idio_index"]) - 1;
+		IntegerVector idio_indices = map["idio_indices"];
 
 		const arma::uword k = indices.nrow();
 		const arma::uword L = indices.ncol();
 
-		if (weights.size() != static_cast<int>(L)) {
-			Rcpp::stop("Incompatible loading-map dimensions.");
+		if (idio_indices.size() != static_cast<int>(L)) {
+			Rcpp::stop("Incompatible idiosyncratic loading-map dimensions");
 		}
 
-		if (idio < 0 || static_cast<arma::uword>(idio) >= n_states) {
-			Rcpp::stop("Invalid idiosyncratic state index.");
+		for (arma::uword lag = 0; lag < L; ++lag) {
+			const int idx = idio_indices[lag];
+
+			if (
+				idx == NA_INTEGER ||
+				idx < 1 ||
+				static_cast<arma::uword>(idx) > n_states	
+			) {
+				Rcpp::stop("Invalid idiosyncratic state index");
+			}
+		}
+		
+		if (weights.size() != static_cast<int>(L)) {
+			Rcpp::stop("Incompatible loading-map dimensions.");
 		}
 
 		for (arma::uword j = 0; j < k; ++j) {
@@ -83,8 +95,13 @@ List update_loadings_cpp(
 				}
 			}
 
-			const double u = F_smooth(t, idio);
+			double u = 0.0;
 
+			for (arma::uword lag = 0; lag < L; ++lag) {
+				const int idx = idio_indices[lag] - 1;
+				u += weights[lag] * F_smooth(t, idx);
+			}
+			
 			S_gg += g * g.t();
 			S_gy += g * y;
 			S_gu += g * u;
@@ -96,7 +113,11 @@ List update_loadings_cpp(
 					const int idx_j = indices(j, a) - 1;
 					const double w_a = weights[a];
 
-					S_gu(j) += w_a * P(idx_j, idio);
+					for (arma::uword b = 0; b < L; ++b) {
+						const int idio_idx = idio_indices[b] - 1;
+
+						S_gu(j) += w_a * weights[b] * P(idx_j, idio_idx);
+					}
 
 					for (arma::uword h = 0; h < k; ++h) {
 						for (arma::uword b = 0; b < L; ++b) {

@@ -113,3 +113,278 @@ data["1988-03-31",1]<-NA
 data1<-data[time(data)<="1987-12-31"]
 
 expect_visible(DFM(data1[,c("x1","x2","y")], r = 1, p = 1, quarterly.vars = c("y")))
+
+
+### Block Factor Model ---------------------------------
+
+make_public_block_data <- function(
+	n = 120L,
+	seed = 123L
+) {
+	set.seed(seed)
+
+	global <- numeric(n)
+	sector <- numeric(n)
+
+	global_shock <- rnorm(n, sd = 0.4)
+	sector_shock <- rnorm(n, sd = 0.3)
+
+	for (t in 2:n) {
+		global[t] <- 0.55 * global[t - 1L] + global_shock[t]
+		sector[t] <- 0.35 * sector[t - 1L] + sector_shock[t]
+	}
+
+	aggregate <- rep(NA_real_, n)
+
+	for (t in 5:n) {
+		aggregate[t] <- sum(
+			.mariano_murasawa_weights *
+				global[t:(t - 4L)]
+		)
+	}
+
+	X <- cbind(
+		M1 = 0.9 * global + 0.7 * sector + rnorm(n, sd = 0.15),
+		M2 = 0.8 * global - 0.5 * sector + rnorm(n, sd = 0.15),
+		M3 = 0.6 * global + rnorm(n, sd = 0.15),
+		M4 = -0.7 * global + rnorm(n, sd = 0.15),
+		Q1 = 1.1 * aggregate + rnorm(n, sd = 0.15)
+	)
+
+	quarter_end <- seq.int(6L, n, by = 3L)
+	X[-quarter_end, "Q1"] <- NA_real_
+
+	X
+}
+
+make_public_block_factors <- function() {
+	list(
+		M1 = c("global", "sector"),
+		M2 = c("global", "sector"),
+		M3 = "global",
+		M4 = "global",
+		Q1 = "global"
+	)
+}
+
+fit_public_block_model <- function(
+	save.full.state = TRUE,
+	min.iter = 2L,
+	max.iter = 2L
+) {
+	X <- make_public_block_data()
+
+	expect_warning(
+		fit <- DFM(
+			X = X,
+			factors = make_public_block_factors(),
+			factor_multiplicities = c(
+				global = 1L,
+				sector = 1L
+			),
+			factor_orders = c(
+				global = 1L,
+				sector = 1L
+			),
+			quarterly.vars = "Q1",
+			idio.ar1 = TRUE,
+			min.iter = min.iter,
+			max.iter = max.iter,
+			save.full.state = save.full.state
+		),
+		"Maximum number of iterations"
+	)
+
+	fit
+}
+
+test_that("DFM dispatches block specifications to the block estimator", {
+	fit <- fit_public_block_model()
+
+	expect_s3_class(fit, "dfm")
+	expect_identical(fit$em.method, "Block")
+	expect_true(is.list(fit$factor.spec))
+	expect_true(is.list(fit$state.layout))
+
+	expect_identical(
+		fit$factor.spec$factor_names,
+		c("global", "sector")
+	)
+})
+
+test_that("public block DFM matrices retain the classical dfm contract", {
+	fit <- fit_public_block_model()
+
+	expect_identical(dim(fit$A), c(2L, 2L))
+	expect_identical(dim(fit$C), c(5L, 2L))
+	expect_identical(dim(fit$Q), c(2L, 2L))
+	expect_identical(dim(fit$R), c(5L, 5L))
+
+	expect_identical(
+		rownames(fit$C),
+		c("M1", "M2", "M3", "M4", "Q1")
+	)
+	expect_identical(
+		colnames(fit$C),
+		c("global", "sector")
+	)
+})
+
+test_that("public block DFM preserves structural loading restrictions", {
+	fit <- fit_public_block_model()
+
+	expect_equal(fit$C["M3", "sector"], 0)
+	expect_equal(fit$C["M4", "sector"], 0)
+	expect_equal(fit$C["Q1", "sector"], 0)
+})
+
+test_that("public block DFM exposes block factor estimates", {
+	fit <- fit_public_block_model()
+	n <- nrow(fit$X_imp)
+
+	expect_identical(dim(fit$F_pca), c(n, 2L))
+	expect_identical(dim(fit$F_2s), c(n, 2L))
+	expect_identical(dim(fit$F_qml), c(n, 2L))
+
+	expect_identical(
+		colnames(fit$F_qml),
+		c("global", "sector")
+	)
+	expect_true(all(is.finite(fit$F_qml)))
+})
+
+test_that("public block DFM exposes idiosyncratic AR1 estimates", {
+	fit <- fit_public_block_model()
+
+	expect_length(fit$rho, 5L)
+	expect_identical(
+		names(fit$rho),
+		c("M1", "M2", "M3", "M4", "Q1")
+	)
+	expect_true(all(is.finite(fit$rho)))
+	expect_true(all(abs(fit$rho) < 1))
+
+	expect_identical(
+		dim(fit$e),
+		c(nrow(fit$X_imp), 5L)
+	)
+})
+
+test_that("public block DFM retains the complete block state when requested", {
+	fit <- fit_public_block_model()
+
+	expect_named(
+		fit$ss_full,
+		c(
+			"A",
+			"C",
+			"Q",
+			"R",
+			"F_0",
+			"P_0",
+			"F_smooth",
+			"P_smooth"
+		)
+	)
+
+	expect_identical(
+		nrow(fit$ss_full$A),
+		fit$state.layout$n_states
+	)
+	expect_identical(
+		ncol(fit$ss_full$C),
+		fit$state.layout$n_states
+	)
+})
+
+test_that("public block DFM can omit the complete state", {
+	fit <- fit_public_block_model(
+		save.full.state = FALSE
+	)
+
+	expect_null(fit$ss_full)
+})
+
+test_that("block DFM final likelihood corresponds to the reported state", {
+	fit <- fit_public_block_model()
+
+	X <- unclass(fit$X_imp)
+	missing <- attr(fit$X_imp, "missing")
+
+	if (!is.null(missing)) {
+		X[missing] <- NA_real_
+	}
+
+	expect_equal(
+		tail(fit$loglik, 1L),
+		with(
+			fit$ss_full,
+			dfms::SKFS(
+				X,
+				A,
+				C,
+				Q,
+				R,
+				F_0,
+				P_0,
+				loglik = TRUE
+			)$loglik
+		),
+		tolerance = 1e-8
+	)
+})
+
+test_that("block DFM rejects conflicting legacy factor count", {
+	X <- make_public_block_data()
+
+	expect_error(
+		DFM(
+			X = X,
+			r = 2L,
+			factors = make_public_block_factors(),
+			quarterly.vars = "Q1",
+			idio.ar1 = TRUE
+		),
+		"r cannot be supplied"
+	)
+})
+
+test_that("block DFM currently requires idiosyncratic AR1 states", {
+	X <- make_public_block_data()
+
+	expect_error(
+		DFM(
+			X = X,
+			factors = make_public_block_factors(),
+			quarterly.vars = "Q1",
+			idio.ar1 = FALSE
+		),
+		"require idio.ar1 = TRUE"
+	)
+})
+
+test_that("block DFM currently rejects legacy DGR and none EM modes", {
+	X <- make_public_block_data()
+
+	expect_error(
+		DFM(
+			X = X,
+			factors = make_public_block_factors(),
+			quarterly.vars = "Q1",
+			idio.ar1 = TRUE,
+			em.method = "DGR"
+		),
+		"support em.method"
+	)
+
+	expect_error(
+		DFM(
+			X = X,
+			factors = make_public_block_factors(),
+			quarterly.vars = "Q1",
+			idio.ar1 = TRUE,
+			em.method = "none"
+		),
+		"support em.method"
+	)
+})

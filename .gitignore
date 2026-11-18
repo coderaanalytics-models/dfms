@@ -54,3 +54,5 @@ vignettes/*.pdf
 # docs
 inst/doc
 docs
+# lintr settings
+.lintr

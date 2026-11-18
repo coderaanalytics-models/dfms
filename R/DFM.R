@@ -43,14 +43,340 @@ dfm_build_ss_full_none <- function(save.full.state, idio.ar1, MFl, init, var, be
        F_smooth = kfs_res$F_smooth, P_smooth = kfs_res$P_smooth)
 }
 
+# Internal block-factor fitter used by DFM() after common preprocessing.
+# It adapts the block state-space estimator back to the existing public
+# dfm object contract.
+dfm_fit_block <- function(
+	X,
+	X_imp,
+	series,
+	factors,
+	factor_multiplicities,
+	factor_orders,
+	quarterly_vars,
+	stats,
+	missing,
+	rm_rows,
+	original_attributes,
+	input_is_list,
+	min_iter,
+	max_iter,
+	tol,
+	check_increased,
+	save_full_state,
+	call
+) {
+	X <- unname(X)
+	X_imp <- unname(X_imp)
+
+	colnames(X) <- series
+	colnames(X_imp) <- series
+
+	spec <- parse_factor_spec(
+		series = series,
+		factors = factors,
+		factor_multiplicities = factor_multiplicities,
+		factor_orders = factor_orders,
+		quarterly_vars = quarterly_vars
+	)
+
+	layout <- build_state_layout(
+		spec = spec,
+		idio_ar1 = TRUE
+	)
+
+	loading_maps <- build_loading_maps(
+		spec = spec,
+		layout = layout
+	)
+
+	# Preserve the factor estimates used to initialise the block state so that
+	# the public object retains the same PCA/two-step/QML progression as the
+	# legacy DFM interface.
+	F_pca <- initialise_block_factors(
+		X_imp = X_imp,
+		spec = spec
+	)
+
+	initial_state <- initialise_block_state(
+		X = X,
+		X_imp = X_imp,
+		spec = spec,
+		layout = layout,
+		loading_maps = loading_maps
+	)
+
+	two_step <- dfms::SKFS(
+		X = X,
+		A = initial_state$A,
+		C = initial_state$C,
+		Q = initial_state$Q,
+		R = initial_state$R,
+		F_0 = initial_state$F_0,
+		P_0 = initial_state$P_0,
+		loglik = FALSE
+	)
+
+	fit <- EMBlock(
+		X = X,
+		state = initial_state,
+		spec = spec,
+		layout = layout,
+		loading_maps = loading_maps,
+		min.iter = min_iter,
+		max.iter = max_iter,
+		tol = tol,
+		check.increased = check_increased
+	)
+
+	factor_indices <- unname(
+		layout$factor$current_indices[
+			spec$factor_names
+		]
+	)
+
+	idio_indices <- unname(
+		layout$idio_current[series]
+	)
+
+	n_factors <- spec$n_factors
+	max_order <- max(unname(spec$block_orders))
+
+	# Convert block-specific VARs back to the classical public DFM transition
+	# representation. Blocks with a lower order receive structural zero
+	# coefficients at the unused lags.
+	A <- matrix(
+		0,
+		nrow = n_factors,
+		ncol = n_factors * max_order,
+		dimnames = list(
+			spec$factor_names,
+			unlist(
+				lapply(
+					seq_len(max_order),
+					function(lag) {
+						paste0(
+							"L",
+							lag,
+							".",
+							spec$factor_names
+						)
+					}
+				),
+				use.names = FALSE
+			)
+		)
+	)
+
+	for (block in names(spec$blocks)) {
+		block_factors <- spec$blocks[[block]]
+		block_positions <- match(
+			block_factors,
+			spec$factor_names
+		)
+
+		coefficients <- fit$factor_updates$coefficients[[block]]
+		order <- spec$block_orders[[block]]
+
+		for (lag in seq_len(order)) {
+			columns <- (
+				(lag - 1L) * n_factors +
+				block_positions
+			)
+
+			A[
+				block_positions,
+				columns
+			] <- coefficients[, , lag]
+		}
+	}
+
+	C <- fit$loadings[
+		series,
+		spec$factor_names,
+		drop = FALSE
+	]
+
+	Q <- fit$state$Q[
+		factor_indices,
+		factor_indices,
+		drop = FALSE
+	]
+	dimnames(Q) <- list(
+		paste0("u", seq_len(n_factors)),
+		paste0("u", seq_len(n_factors))
+	)
+
+	R <- diag(
+		diag(
+			fit$state$Q[
+				idio_indices,
+				idio_indices,
+				drop = FALSE
+			]
+		)
+	)
+	
+	dimnames(R) <- list(
+		series,
+		series
+	)
+
+	F_2s <- two_step$F_smooth[
+		,
+		factor_indices,
+		drop = FALSE
+	]
+	colnames(F_2s) <- spec$factor_names
+
+	P_2s <- two_step$P_smooth[
+		factor_indices,
+		factor_indices,
+		,
+		drop = FALSE
+	]
+	dimnames(P_2s) <- list(
+		spec$factor_names,
+		spec$factor_names,
+		NULL
+	)
+
+	F_qml <- fit$smooth$F_smooth[
+		,
+		factor_indices,
+		drop = FALSE
+	]
+	colnames(F_qml) <- spec$factor_names
+
+	P_qml <- fit$smooth$P_smooth[
+		factor_indices,
+		factor_indices,
+		,
+		drop = FALSE
+	]
+	dimnames(P_qml) <- list(
+		spec$factor_names,
+		spec$factor_names,
+		NULL
+	)
+
+	P_0 <- initial_state$P_0[
+		factor_indices,
+		factor_indices,
+		drop = FALSE
+	]
+	dimnames(P_0) <- list(
+		spec$factor_names,
+		spec$factor_names
+	)
+
+	e <- fit$smooth$F_smooth[
+		,
+		idio_indices,
+		drop = FALSE
+	]
+	colnames(e) <- series
+
+	rho <- diag(
+		fit$state$A[
+			idio_indices,
+			idio_indices,
+			drop = FALSE
+		]
+	)
+	names(rho) <- series
+
+	ss_full <- if (isTRUE(save_full_state)) {
+		c(
+			fit$state,
+			list(
+				F_smooth = fit$smooth$F_smooth,
+				P_smooth = fit$smooth$P_smooth
+			)
+		)
+	} else {
+		NULL
+	}
+
+	loglik <- fit$loglik
+
+	# EMBlock performs one final smoother evaluation after the final M-step.
+	# Report that likelihood for the final fitted model while preserving one
+	# likelihood entry per EM iteration.
+	if (length(loglik) > 0L) {
+		loglik[[length(loglik)]] <- fit$smooth$loglik
+	}
+
+	X_imp_out <- structure(
+		X_imp,
+		dimnames = list(NULL, series),
+		stats = stats,
+		missing = missing,
+		attributes = original_attributes,
+		is.list = input_is_list
+	)
+
+	# Retain the ordinary covariance eigendecomposition for compatibility with
+	# existing dfm tooling. Block factors themselves are initialised by the
+	# restricted sequential PCA procedure in initialise_block_factors().
+	eigen_decomp <- eigen(
+		cov(X_imp),
+		symmetric = TRUE
+	)
+
+	object <- list(
+		X_imp = X_imp_out,
+		eigen = eigen_decomp,
+		F_pca = F_pca,
+		P_0 = P_0,
+		F_2s = F_2s,
+		P_2s = P_2s,
+		F_qml = F_qml,
+		P_qml = P_qml,
+		A = A,
+		C = C,
+		Q = Q,
+		R = R,
+		ss_full = ss_full,
+		e = e,
+		rho = rho,
+		loglik = loglik,
+		tol = tol,
+		converged = fit$converged,
+		anyNA = !is.null(missing) && any(missing),
+		rm.rows = rm_rows,
+		quarterly.vars = quarterly_vars,
+		em.method = "Block",
+		factor.spec = spec,
+		state.layout = layout,
+		call = call
+	)
+
+	class(object) <- "dfm"
+
+	object
+}
+
+
 #' Estimate a Dynamic Factor Model
 #'
 #' Efficient estimation of a Dynamic Factor Model via the EM Algorithm - on stationary data
 #' with time-invariant system matrices and classical assumptions, while permitting missing data.
 #'
 #' @param X a \code{T x n} numeric data matrix or frame of stationary time series. May contain missing values. \emph{Note} that data is internally standardized (scaled and centered) before estimation.
-#' @param r integer. Number of factors.
-#' @param p integer. Number of lags in factor VAR.
+#' @param r integer or NULL. Number of factors for the classical DFM. Must be
+#'   NULL when using a block-factor specification through `factors`.
+#' @param p integer. Number of lags in the classical factor VAR. For block
+#'   models this is also the default factor order when `factor_orders` is NULL.
+#' @param factors optional block-factor specification. A character vector or
+#'   named list assigning observed series to factors. When supplied, `DFM()`
+#'   estimates the block-factor model instead of the classical unrestricted
+#'   factor model.
+#' @param factor_multiplicities positive integer or named integer vector giving
+#'   the number of factors represented by each base factor.
+#' @param factor_orders block-factor VAR orders. May be a positive integer, a
+#'   named integer vector, or an explicit named block specification accepted by
+#'   `parse_factor_spec()`. If NULL, `p` is used.
 #' @param \dots (optional) arguments to \code{\link{tsnarmimp}}. The default settings impute internal missing values with a cubic spline and the edges with the median and a 3-period moving average.
 #' @param idio.ar1 logical. Model observation errors as AR(1) processes: \eqn{e_t = \rho e_{t-1} + v_t}{e(t) = rho e(t-1) + v(t)}. \emph{Note} that this substantially increases computation time, and is generally not needed if \code{n} is large (>30). See theoretical vignette for details.
 #' @param save.full.state logical. Save full state-space matrices and smoothed states in \code{ss_full}? Set to \code{FALSE} to reduce object size.
@@ -272,9 +598,12 @@ dfm_build_ss_full_none <- function(save.full.state, idio.ar1, MFl, init, var, be
 #' }
 #' @export
 
-DFM <- function(X, r, p = 1L, ...,
+DFM <- function(X, r = NULL, p = 1L, ...,
+                factors = NULL,
+                factor_multiplicities = 1L,
+                factor_orders = NULL,
                 idio.ar1 = FALSE,
-                quarterly.vars = NULL, # blocks = c(),
+                quarterly.vars = NULL,
                 rQ = c("none", "diagonal", "identity"),
                 rR = c("diagonal", "identity", "none"),
                 em.method = c("auto", "DGR", "BM", "none"),
@@ -309,13 +638,37 @@ DFM <- function(X, r, p = 1L, ...,
   #' -> In general, all input to DFM() is converted to matrix by collapse::qM(), which also removes classes from objects that are already matrix based. All internal code is based on plain matrices.
   rRi <- switch(tolower(rR[1L]), identity = 0L, diagonal = 1L, none = 2L, stop("Unknown rR option:", rR[1L]))
   rQi <- switch(tolower(rQ[1L]), identity = 0L, diagonal = 1L, none = 2L, stop("Unknown rQ option:", rQ[1L]))
+
+  block_model <- !is.null(factors)
+
+  if(block_model) {
+    if(!is.null(r)) stop("r cannot be supplied when factors is used.")
+    if(is.null(factor_orders)) factor_orders <- p
+    if(!isTRUE(idio.ar1))
+      stop("Block factor models currently require idio.ar1 = TRUE.")
+    if(!tolower(em.method[1L]) %in% c("auto", "bm"))
+      stop("Block factor models currently support em.method = \"auto\" or \"BM\".")
+    if(tolower(rQ[1L]) != "none")
+      stop("Block factor models currently require rQ = \"none\".")
+    if(tolower(rR[1L]) != "diagonal")
+      stop("Block factor models currently require rR = \"diagonal\".")
+  } else if(!is.null(factor_orders)) {
+    stop("factor_orders requires factors.")
+  }
+
   #' @srrstats {G2.0} *Implement assertions on lengths of inputs, particularly through asserting that inputs expected to be single- or multi-valued are indeed so.*
   #' @srrstats {G2.0a} Provide explicit secondary documentation of any expectations on lengths of inputs
-  if(sum(length(r), length(p), length(idio.ar1), length(min.iter), length(max.iter), length(tol),
-         length(pos.corr), length(check.increased), length(save.full.state)) != 9L)
-    stop("Parameters r, p, idio.ar1, min.iter, max.iter, tol, pos.corr, check.increased and save.full.state need to be length 1")
-  if(!is.numeric(r) || r <= 0L) stop("r needs to be integer > 0")
-  if(!is.integer(r)) r <- as.integer(r)
+  scalar_lengths <- c(length(p), length(idio.ar1), length(min.iter),
+                      length(max.iter), length(tol), length(pos.corr),
+                      length(check.increased), length(save.full.state))
+  if(!block_model) scalar_lengths <- c(length(r), scalar_lengths)
+  if(any(scalar_lengths != 1L))
+    stop("Scalar DFM control parameters must each have length 1.")
+
+  if(!block_model) {
+    if(!is.numeric(r) || r <= 0L) stop("r needs to be integer > 0")
+    if(!is.integer(r)) r <- as.integer(r)
+  }
   if(!is.numeric(p) || p <= 0L) stop("p needs to be integer > 0")
   if(!is.integer(p)) p <- as.integer(p)
   if(!is.numeric(min.iter) || min.iter < 0L) stop("min.iter needs to be integer >= 0")
@@ -401,10 +754,6 @@ DFM <- function(X, r, p = 1L, ...,
   #' @srrstats {TS2.4a} *issue diagnostic messages or warnings; or*
   #' @srrstats {TS2.4b} *enable or advise on appropriate transformations to ensure stationarity.*
   #' -> it is possible to run DFM() on non-stationary data and obtain convergent results, although this is strongly discouraged.
-  rp <- r * p
-  sr <- seq_len(r)
-  fnam <- paste0("f", sr)
-  unam <- paste0("u", sr)
   ax <- attributes(X)
   ilX <- is.list(X)
   Xstat <- qsu(X)
@@ -447,6 +796,40 @@ DFM <- function(X, r, p = 1L, ...,
 
   # This is because after removing missing rows, the data could be complete, e.g. differencing data with diff.xts() of collapse::fdiff() just gives a NA row
   if(anymiss && length(rm.rows)) anymiss <- any(W)
+
+  if(block_model) {
+    quarterly_block <- if(is.null(quarterly.vars)) character() else quarterly.vars
+
+    return(
+      dfm_fit_block(
+        X = X,
+        X_imp = X_imp,
+        series = Xnam,
+        factors = factors,
+        factor_multiplicities = factor_multiplicities,
+        factor_orders = factor_orders,
+        quarterly_vars = quarterly_block,
+        stats = Xstat,
+        missing = if(anymiss) W else NULL,
+        rm_rows = rm.rows,
+        original_attributes = ax,
+        input_is_list = ilX,
+        min_iter = min.iter,
+        max_iter = max.iter,
+        tol = tol,
+        check_increased = check.increased,
+        save_full_state = save.full.state,
+        call = match.call()
+      )
+    )
+  }
+
+  # Legacy unrestricted DFM state dimensions.
+  rp <- r * p
+  sr <- seq_len(r)
+  fnam <- paste0("f", sr)
+  unam <- paste0("u", sr)
+
   BMl <- switch(tolower(em.method[1L]), auto = anymiss || idio.ar1 || MFl, dgr = FALSE || idio.ar1 || MFl,
                 bm = TRUE, none = NA, stop("Unknown EM option:", em.method[1L]))
 
@@ -661,4 +1044,3 @@ DFM <- function(X, r, p = 1L, ...,
   class(final_object) <- "dfm"
   return(final_object)
 }
-
