@@ -37,58 +37,64 @@ export(convert)
 export(em_converged)
 export(news)
 export(tsnarmimp)
-importFrom(collapse,"%*=%")
-importFrom(collapse,"%+=%")
-importFrom(collapse,"%-=%")
-importFrom(collapse,"%/=%")
-importFrom(collapse,"%=%")
-importFrom(collapse,"%r*%")
-importFrom(collapse,TRA.matrix)
-importFrom(collapse,ckmatch)
-importFrom(collapse,flag)
-importFrom(collapse,fmedian)
-importFrom(collapse,fmedian.default)
-importFrom(collapse,fmin.matrix)
-importFrom(collapse,frange)
-importFrom(collapse,fscale)
-importFrom(collapse,fvar)
-importFrom(collapse,mctl)
-importFrom(collapse,na_omit)
-importFrom(collapse,na_rm)
-importFrom(collapse,pad)
-importFrom(collapse,pwcov)
-importFrom(collapse,qM)
-importFrom(collapse,qsu)
-importFrom(collapse,rowbind)
-importFrom(collapse,seq_row)
-importFrom(collapse,setAttrib)
-importFrom(collapse,setColnames)
-importFrom(collapse,setDimnames)
-importFrom(collapse,setop)
-importFrom(collapse,t_list)
-importFrom(collapse,unattrib)
-importFrom(collapse,unlist2d)
-importFrom(collapse,vec)
-importFrom(collapse,whichNA)
-importFrom(collapse,whichv)
+importFrom(collapse,
+  "%*=%",
+  "%+=%",
+  "%-=%",
+  "%/=%",
+  "%=%",
+  "%r*%",
+  TRA.matrix,
+  ckmatch,
+  flag,
+  fmedian,
+  fmedian.default,
+  fmin.matrix,
+  frange,
+  fscale,
+  fvar,
+  mctl,
+  na_omit,
+  na_rm,
+  pad,
+  pwcov,
+  qM,
+  qsu,
+  rowbind,
+  seq_row,
+  setAttrib,
+  setColnames,
+  setDimnames,
+  setop,
+  t_list,
+  unattrib,
+  unlist2d,
+  vec,
+  whichNA,
+  whichv
+)
 importFrom(grDevices,rainbow)
-importFrom(graphics,abline)
-importFrom(graphics,axis)
-importFrom(graphics,box)
-importFrom(graphics,boxplot)
-importFrom(graphics,grid)
-importFrom(graphics,legend)
-importFrom(graphics,lines)
-importFrom(graphics,mtext)
-importFrom(graphics,par)
-importFrom(graphics,plot.default)
-importFrom(graphics,points)
-importFrom(stats,cov)
-importFrom(stats,filter)
-importFrom(stats,residuals)
-importFrom(stats,rnorm)
-importFrom(stats,screeplot)
-importFrom(stats,setNames)
-importFrom(stats,spline)
-importFrom(stats,ts.plot)
+importFrom(graphics,
+  abline,
+  axis,
+  box,
+  boxplot,
+  grid,
+  legend,
+  lines,
+  mtext,
+  par,
+  plot.default,
+  points
+)
+importFrom(stats,
+  cov,
+  filter,
+  residuals,
+  rnorm,
+  screeplot,
+  setNames,
+  spline,
+  ts.plot
+)
 useDynLib(dfms, .registration = TRUE)

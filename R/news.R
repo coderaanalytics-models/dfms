@@ -1,44 +1,3 @@
-
-dfm_news_stationary_cov <- function(A, Q) {
-  rp <- nrow(A)
-  M <- diag(rp^2) - kronecker(A, A)
-  P_0 <- ainv(M) %*% unattrib(Q)
-  dim(P_0) <- c(rp, rp)
-  P_0
-}
-
-dfm_news_state <- function(dfm, require_full = FALSE) {
-  ss_full <- dfm[["ss_full"]]
-  if(!is.null(ss_full)) {
-    needed <- c("A", "C", "Q", "R", "F_0", "P_0")
-    if(any(!needed %in% names(ss_full))) stop("ss_full is missing required state matrices")
-    return(ss_full)
-  }
-
-  if(isTRUE(require_full)) {
-    stop("news() requires dfm objects with full state matrices for MQ or idio.ar1 models; re-estimate with the updated package")
-  }
-
-  # Build full state from compact matrices (baseline case)
-  A <- dfm$A
-  C <- dfm$C
-  Q <- dfm$Q
-  R <- dfm$R
-  r <- nrow(A)
-  if(ncol(A) %% r != 0L) stop("Invalid transition matrix dimensions in dfm object")
-  p <- ncol(A) / r
-  rp <- r * p
-  A_state <- matrix(0, rp, rp)
-  A_state[1:r, 1:rp] <- A
-  if(rp > r) A_state[(r + 1L):rp, 1:(rp - r)] <- diag(rp - r)
-  C_state <- cbind(C, matrix(0, nrow(C), rp - r))
-  Q_state <- matrix(0, rp, rp)
-  Q_state[1:r, 1:r] <- Q
-  F_0 <- rep(0, rp)
-  P_0 <- dfm_news_stationary_cov(A_state, Q_state)
-  list(A = A_state, C = C_state, Q = Q_state, R = R, F_0 = F_0, P_0 = P_0)
-}
-
 dfm_news_kfs <- function(X, state, k) {
   A <- state$A
   C <- state$C
@@ -102,14 +61,6 @@ dfm_news_stats <- function(X) {
     return(list(Mx = rep(0, n), Wx = rep(1, n)))
   }
   list(Mx = stats[, "Mean"], Wx = stats[, "SD"])
-}
-
-dfm_news_scale <- function(X, stats) {
-  if(is.null(stats)) stop("stats are required to scale X")
-  class(stats) <- NULL
-  Mx <- stats[, "Mean"]
-  Wx <- stats[, "SD"]
-  TRA.matrix(TRA.matrix(X, Mx, "-"), Wx, "/")
 }
 
 resolve_vars <- function(target.vars, n, names) {

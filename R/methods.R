@@ -510,6 +510,10 @@ fitted.dfm <- function(object,
 #' @param target.vars Integer or character identifying target variables. Defaults to all variables.
 #' @param series optional character vector for naming variables.
 #' @param standardized logical. Return results on standardized scale?
+#' @param refit logical. If \code{TRUE}, re-estimate the model on
+#'   \code{comparison} using the original model specification. If \code{FALSE},
+#'   reuse the fitted parameters from \code{object} and update only the latent
+#'   states using the comparison data.
 #' @param \dots not used.
 #' @return For a single target, a \code{dfm_news} object with elements:
 #' \itemize{
@@ -588,18 +592,29 @@ news.dfm <- function(object,
                      t.fcst = nrow(object$X_imp),
                      target.vars = NULL,
                      series = NULL,
-                     standardized = FALSE, ...) {
-  if(inherits(comparison, "dfm")) {
-    dfm_new <- comparison
-  } else {
-    cl <- object$call
-    if(is.null(cl)) stop("dfm object has no call to re-estimate comparison")
-    if(length(object$rm.rows)) comparison <- comparison[-object$rm.rows, , drop = FALSE]
-    cl$max.missing <- 1
-    if(is.null(cl$X)) cl[[2L]] <- comparison else cl$X <- comparison
-    dfm_new <- eval(cl, envir = parent.frame())
-    if(!inherits(dfm_new, "dfm")) stop("comparison data did not produce a 'dfm' object")
-  }
+                     standardized = FALSE,
+                     refit = TRUE,
+                     ...) {
+	if (inherits(comparison, "dfm")) {
+		dfm_new <- comparison
+	} else {
+		if (length(object$rm.rows)) {
+			comparison <- comparison[
+				-object$rm.rows,
+				,
+				drop = FALSE
+			]
+		}
+	
+		dfm_new <- update(
+			object,
+			newdata = comparison,
+			refit = refit,
+			max.missing = 1,
+			...
+		)
+	}
+	
   X_old <- dfm_news_restore_missing(object$X_imp)
   X_new <- dfm_news_restore_missing(dfm_new$X_imp)
 
@@ -608,7 +623,7 @@ news.dfm <- function(object,
   if(is.null(stats_new)) stop("dfm_new lacks stats to standardize data")
   if(is.null(stats_old)) stop("dfm object lacks stats to standardize data")
 
-  X_old <- dfm_news_scale(unscale(X_old, stats_old), stats_new)
+  X_old <- dfm_scale(unscale(X_old, stats_old), stats_new)
 
   if(nrow(X_old) != nrow(X_new) || ncol(X_old) != ncol(X_new)) {
     stop("dfm objects have incompatible data dimensions")
@@ -644,7 +659,15 @@ news.dfm <- function(object,
   # Detect model type: MQ and/or AR1
   quarterly.vars <- dfm_new$quarterly.vars
   idio.ar1 <- !is.null(dfm_new$rho)
-  state <- dfm_news_state(dfm_new, require_full = length(quarterly.vars) || idio.ar1)
+  
+  state <- dfm_state(
+		dfm_new,
+		require_full = (
+			length(quarterly.vars) > 0L ||
+			idio.ar1 ||
+			!is.null(dfm_new$factor.spec)
+		)
+  )
 
   # Compute releases ONCE (shared across all targets)
   rel <- which(is.na(X_old) & !is.na(X_new), arr.ind = TRUE)
@@ -1445,3 +1468,72 @@ screeplot.dfm <- function(x, ...) {
   screeplot.ICr(xl, ...)
 }
 
+
+
+
+#' Ipdate a Dynamic Factor Model
+#' 
+#' Apply an existing fitted dyanmic factor model to new data while optionally
+#' retaining the previously estimated parameters.
+#' 
+#' @param object A fitted object of class \code{"dfm"}.
+#' @param newdata New data containing the same variables as the original fit.
+#' @param refit Logical. If \code{FALSE}, reuse fitted parameters and rerun only
+#'   the Kalman filter and smoother. If \code{TRUE}, re-estimate the model using
+#'   the stored model specification.
+#' @param \dots Additional arguments passed to preprocessing when
+#'   \code{refit = FALSE}, or used to override fitting arguments when
+#'   \code{refit = TRUE}.
+#' 
+#' @return An updated object of class \code{"dfm"}.
+#' 
+#' @export
+update.dfm <- function(
+	object,
+	newdata,
+	refit = FALSE,
+	...
+) {
+	if(
+		!is.logical(refit) ||
+		length(refit) != 1L ||
+		is.na(refit)
+	) {
+		stop("refit must be TRUE or FALSE")
+	}
+
+	if (refit) {
+		if (is.null(object$fit.args)) {
+			stop("dfm object does not contain fitted model arguments")
+		}
+
+		args <- object$fit.args
+		args$X <- newdata
+		
+		dots <- list(...)
+
+		if (length(dots)) {
+			if (
+				is.null(names(dots)) ||
+				any(!nzchar(names(dots)))
+			) {
+				stop("Additional arguments to refit must be named")
+			}
+
+			args[names(dots)] <- dots
+		}
+
+		return(do.call(DFM, args))
+	}
+
+	applied <- dfm_apply_state(object, newdata, ...)
+
+	updated <- dfm_update_object(object, applied)
+
+	updated$updated.call <- match.call()
+	updated$refit <- FALSE
+
+	class(updated) <- "dfm"
+
+	updated
+}

@@ -384,3 +384,165 @@ test_that("news_list works as expected", {
   expect_equal(attr(df, "t.fcst"), attr(res_list, "t.fcst"))
   expect_equal(attr(df, "standardized"), attr(res_list, "standardized"))
 })
+
+test_that("news.dfm preserves refit behavior by default", {
+	set.seed(123)
+
+	X <- matrix(rnorm(120), nrow = 24)
+	colnames(X) <- paste0("v", seq_len(ncol(X)))
+
+	X_old <- X
+	X_new <- X
+
+	# One new release.
+	X_old[20, "v1"] <- NA
+
+	# Keep the target unobserved at the forecast date so that news
+	# decomposition is used rather than the directly-observed-target case.
+	X_old[24, "v2"] <- NA
+	X_new[24, "v2"] <- NA
+
+	fit <- DFM(
+		X_old,
+		r = 2,
+		p = 1,
+		em.method = "none",
+		max.missing = 1
+	)
+
+	default <- news(
+		fit,
+		X_new,
+		t.fcst = 24,
+		target.vars = "v2"
+	)
+
+	explicit <- news(
+		fit,
+		X_new,
+		t.fcst = 24,
+		target.vars = "v2",
+		refit = TRUE
+	)
+
+	expect_equal(default, explicit)
+})
+
+
+test_that("news.dfm can compute news with fixed parameters", {
+	set.seed(456)
+
+	X <- matrix(rnorm(120), nrow = 24)
+	colnames(X) <- paste0("v", seq_len(ncol(X)))
+
+	X_old <- X
+	X_new <- X
+
+	X_old[20, "v1"] <- NA
+
+	X_old[24, "v2"] <- NA
+	X_new[24, "v2"] <- NA
+
+	fit <- DFM(
+		X_old,
+		r = 2,
+		p = 1,
+		em.method = "none",
+		max.missing = 1
+	)
+
+	result <- news(
+		fit,
+		X_new,
+		t.fcst = 24,
+		target.vars = "v2",
+		refit = FALSE
+	)
+
+	fixed_update <- update(
+		fit,
+		newdata = X_new,
+		refit = FALSE,
+		max.missing = 1
+	)
+
+	expected <- news(
+		fit,
+		fixed_update,
+		t.fcst = 24,
+		target.vars = "v2"
+	)
+
+	expect_s3_class(result, "dfm_news")
+	expect_equal(result, expected)
+
+	expect_equal(fixed_update$A, fit$A)
+	expect_equal(fixed_update$C, fit$C)
+	expect_equal(fixed_update$Q, fit$Q)
+	expect_equal(fixed_update$R, fit$R)
+})
+
+
+test_that("news.dfm fixed-parameter and refitted news can differ", {
+	set.seed(789)
+
+	X <- matrix(rnorm(120), nrow = 24)
+	colnames(X) <- paste0("v", seq_len(ncol(X)))
+
+	X_old <- X
+	X_new <- X
+
+	# New release.
+	X_old[20, "v1"] <- NA
+
+	# Keep target unobserved.
+	X_old[24, "v2"] <- NA
+	X_new[24, "v2"] <- NA
+
+	# Make the new vintage materially different so that re-estimation
+	# changes the fitted model rather than only updating the states.
+	X_new[, "v3"] <- X_new[, "v3"] * 3
+	X_new[, "v4"] <- X_new[, "v4"] - 2
+
+	fit <- DFM(
+		X_old,
+		r = 2,
+		p = 1,
+		em.method = "none",
+		max.missing = 1
+	)
+
+	fixed <- news(
+		fit,
+		X_new,
+		t.fcst = 24,
+		target.vars = "v2",
+		refit = FALSE
+	)
+
+	refitted <- news(
+		fit,
+		X_new,
+		t.fcst = 24,
+		target.vars = "v2",
+		refit = TRUE
+	)
+
+	expect_false(
+		isTRUE(
+			all.equal(
+				fixed$y_new,
+				refitted$y_new
+			)
+		)
+	)
+
+	expect_false(
+		isTRUE(
+			all.equal(
+				fixed$news_df$impact,
+				refitted$news_df$impact
+			)
+		)
+	)
+})

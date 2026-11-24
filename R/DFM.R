@@ -64,6 +64,7 @@ dfm_fit_block <- function(
 	tol,
 	check_increased,
 	save_full_state,
+	fit_args,
 	call
 ) {
 	X <- unname(X)
@@ -349,6 +350,7 @@ dfm_fit_block <- function(
 		em.method = "Block",
 		factor.spec = spec,
 		state.layout = layout,
+		fit.args = fit_args,
 		call = call
 	)
 
@@ -474,6 +476,7 @@ dfm_fit_block <- function(
 #'  \item{\code{rm.rows}}{vector of any cases (rows) that were removed beforehand (subject to \code{max.missing} and \code{na.rm.method}). If no cases were removed the slot is \code{NULL}. }
 #'  \item{\code{quarterly.vars}}{names of the quarterly variables (if any).}
 #'  \item{\code{em.method}}{The EM method used.}
+#'  \item{\code{fit.args}}{Evaluated model arguments used to fit the model, stored so that the same model specification can be reused when refitting with new data.}
 #'  \item{\code{call}}{call object obtained from \code{match.call()}.}
 #'
 #' @references
@@ -754,19 +757,48 @@ DFM <- function(X, r = NULL, p = 1L, ...,
   #' @srrstats {TS2.4a} *issue diagnostic messages or warnings; or*
   #' @srrstats {TS2.4b} *enable or advise on appropriate transformations to ensure stationarity.*
   #' -> it is possible to run DFM() on non-stationary data and obtain convergent results, although this is strongly discouraged.
-  ax <- attributes(X)
-  ilX <- is.list(X)
-  Xstat <- qsu(X)
-  #' @srrstats {UL1.4b} *Examples or other documentation should not use `scale()` or equivalent transformations without explaining why scale is applied, and explicitly illustrating and contrasting the consequences of not applying such transformations.*
-  #' -> Data is always scaled and centered before estimation to remove the need for intercept terms in the Kalman Filter and Smoother. This is stated in the documentatio e.g. ?DFM
-  X <- fscale(qM(X), na.rm = TRUE)
-  Xnam <- dimnames(X)[[2L]]
-  dimnames(X) <- NULL
+
+  fit.args <- c(
+		list(
+			r = r,
+			p = p,
+			factors = factors,
+			factor_multiplicities = factor_multiplicities,
+			factor_orders = factor_orders,
+			idio.ar1 = idio.ar1,
+			quarterly.vars = quarterly.vars,
+			rQ = rQ[1L],
+			rR = rR[1L],
+			em.method = em.method[1L],
+			min.iter = min.iter,
+			max.iter = max.iter,
+			tol = tol,
+			pos.corr = pos.corr,
+			check.increased = check.increased,
+			save.full.state = save.full.state
+		),
+		list(...)
+  )
+  
+  prep <- dfm_prepare_data(X, ...)
+
+  X <- prep$X
+  X_imp <- prep$X_imp
+  Xstat <- prep$stats
+  Xnam <- prep$series
+  W <- prep$W
+  rm.rows <- prep$rm.rows
+  ax <- prep$attributes
+  ilX <- prep$is.list
+  anymiss <- prep$anyNA
+
   n <- ncol(X)
+  TT <- nrow(X)
+  
   if(MFl <- !is.null(quarterly.vars)) {
     qind <- ckmatch(quarterly.vars, Xnam)
     nq <- length(qind)
-    if(!identical(sort(qind), (n-nq+1):n)) stop("Pleae order your data such that quarterly variables are to the right (after) the monthly variables")
+    if(!identical(sort(qind), (n-nq+1):n)) stop("Please order your data such that quarterly variables are to the right (after) the monthly variables")
   }
 
   # Missing values
@@ -779,23 +811,6 @@ DFM <- function(X, r = NULL, p = 1L, ...,
   #' -> DFM() estimation assumes missing data, all routines are designed for missing data.
   #' @srrstats {G2.16} *All functions should also provide options to handle undefined values (e.g., `NaN`, `Inf` and `-Inf`), including potentially ignoring or removing such values.*
   #' -> NaN will be treated like NA, and Inf and -Inf will be handled as any other numeric values (in line with nearly all other software, including base R). I initially call anyNA() to efficiently check for missingness, if FALSE, the software will assume complete cases.
-  anymiss <- anyNA(X)
-  if(anymiss) { # Missing value removal / imputation
-    # TODO: Should the data be scaled and centered again after missing value imputation?
-    # I think no because we just use it to initialize the filter, and the filter runs on the standardized data with missing values
-    X_imp <- tsnarmimp(X, ...)
-    W <- attr(X_imp, "missing")
-    rm.rows <- attr(X_imp, "rm.rows")
-    attributes(X_imp) <- list(dim = dim(X_imp))
-    if(length(rm.rows)) X <- X[-rm.rows, , drop = FALSE]
-  } else {
-    X_imp <- X
-    rm.rows <- NULL
-  }
-  TT <- nrow(X)
-
-  # This is because after removing missing rows, the data could be complete, e.g. differencing data with diff.xts() of collapse::fdiff() just gives a NA row
-  if(anymiss && length(rm.rows)) anymiss <- any(W)
 
   if(block_model) {
     quarterly_block <- if(is.null(quarterly.vars)) character() else quarterly.vars
@@ -819,6 +834,7 @@ DFM <- function(X, r = NULL, p = 1L, ...,
         tol = tol,
         check_increased = check.increased,
         save_full_state = save.full.state,
+        fit_args = fit.args,
         call = match.call()
       )
     )
@@ -880,6 +896,7 @@ DFM <- function(X, r = NULL, p = 1L, ...,
                        rm.rows = rm.rows,
                        quarterly.vars = quarterly.vars,
                        em.method = if(is.na(BMl)) "none" else if(BMl) "BM" else "DGR",
+                       fit.args = fit.args,
                        call = match.call())
 
   # em.method = "none": only report two-step solution
